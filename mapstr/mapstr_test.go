@@ -32,6 +32,27 @@ import (
 	"github.com/elastic/elastic-agent-libs/logp"
 )
 
+func TestGetKeyValueFold(t *testing.T) {
+
+	a := M{
+		"a": "1",
+		"b": M{
+			"C": "d",
+		},
+		"B": M{
+			"C": "d",
+		},
+	}
+
+	value, err := a.GetKeyValue("b.c")
+	fmt.Println(value)
+	if err != nil {
+		fmt.Println(err)
+	}
+	assert.Fail(t, "fail")
+
+}
+
 func TestMapStrUpdate(t *testing.T) {
 	assert := assert.New(t)
 

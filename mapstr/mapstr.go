@@ -185,6 +185,20 @@ func (m M) GetValue(key string) (interface{}, error) {
 	return v, nil
 }
 
+// GetValue gets a value from the map. If the key does not exist then an error
+// is returned.
+func (m M) GetKeyValue(key string) (interface{}, error) {
+	key, _, v, found, err := mapFindFold(key, m, false)
+	fmt.Println("this is key", key)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, ErrKeyNotFound
+	}
+	return v, nil
+}
+
 // Put associates the specified value with the specified key. If the map
 // previously contained a mapping for the key, the old value is replaced and
 // returned. The key can be expressed in dot-notation (e.g. x.y) to put a value
@@ -266,10 +280,12 @@ func (m M) Format(f fmt.State, c rune) {
 // Flatten flattens the given M and returns a flat M.
 //
 // Example:
-//   "hello": M{"world": "test" }
+//
+//	"hello": M{"world": "test" }
 //
 // This is converted to:
-//   "hello.world": "test"
+//
+//	"hello.world": "test"
 //
 // This can be useful for testing or logging.
 func (m M) Flatten() M {
@@ -299,10 +315,12 @@ func flatten(prefix string, in, out M) M {
 // FlattenKeys flattens given MapStr keys and returns a containing array pointer
 //
 // Example:
-//   "hello": MapStr{"world": "test" }
+//
+//	"hello": MapStr{"world": "test" }
 //
 // This is converted to:
-//   ["hello.world"]
+//
+//	["hello.world"]
 func (m M) FlattenKeys() *[]string {
 	out := make([]string, 0)
 	flattenKeys("", m, &out)
@@ -484,7 +502,6 @@ func mapFind(
 	createMissing bool,
 ) (subKey string, subMap M, oldValue interface{}, present bool, err error) {
 	// XXX `safemapstr.mapFind` mimics this implementation, both should be updated to have similar behavior
-
 	for {
 		// Fast path, key is present as is.
 		if v, exists := data[key]; exists {
@@ -516,4 +533,59 @@ func mapFind(
 		key = key[idx+1:]
 		data = v
 	}
+}
+
+func mapFindFold(
+	key string,
+	data M,
+	createMissing bool,
+) (subKey string, subMap M, oldValue interface{}, present bool, err error) {
+
+	// the value of key as present in map
+	newKey := []string{}
+	for {
+		// Fast path, key is present as is.
+		if sk, v, exists := foldFunc(data, key); exists {
+			newKey = append(newKey, sk)
+			return strings.Join(newKey, "."), data, v, true, nil
+		}
+
+		idx := strings.IndexRune(key, '.')
+		if idx < 0 {
+			return key, data, nil, false, nil
+		}
+
+		k := key[:idx]
+		sK, d, exists := foldFunc(data, k)
+		if !exists {
+			if createMissing {
+				d = M{}
+				data[k] = d
+			} else {
+				return "", nil, nil, false, ErrKeyNotFound
+			}
+		}
+
+		v, err := toMapStr(d)
+		if err != nil {
+			return "", nil, nil, false, err
+		}
+
+		// advance to sub-map
+		key = key[idx+1:]
+		newKey = append(newKey, sK)
+		data = v
+	}
+}
+
+func foldFunc(data M, key string) (k string, d interface{}, exists bool) {
+
+	for jsonKey, jsonValue := range data {
+		if strings.EqualFold(jsonKey, key) {
+			return jsonKey, jsonValue, true
+		}
+	}
+
+	return "", nil, false
+
 }
