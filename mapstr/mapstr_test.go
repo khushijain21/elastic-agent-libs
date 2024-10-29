@@ -44,13 +44,43 @@ func TestGetKeyValueFold(t *testing.T) {
 		},
 	}
 
-	value, err := a.GetKeyValue("b.c")
-	fmt.Println(value)
+	key, value, err := a.GetKeyValue("b.c")
+	fmt.Println(key, value)
 	if err != nil {
 		fmt.Println(err)
 	}
 	assert.Fail(t, "fail")
 
+}
+
+func BenchmarkGetKeyValue(b *testing.B) {
+	// Set up your test data
+	Input := M{
+		"Field1": M{"Field2": "Value"},
+		"Field3": "Value",
+		"a": M{
+			"B": M{
+				"C": "D",
+			},
+		},
+		"A": M{
+			"B": M{
+				"C": M{
+					"C": "D",
+				},
+			},
+		},
+	}
+
+	// Run the benchmark for b.N iterations
+	for i := 0; i < b.N; i++ {
+		key, value, err := Input.GetKeyValue("a.b.c") // Call the function being benchmarked
+		if err != nil {
+			b.Error(err) // Report any errors
+		}
+		_ = key   // Use the result to avoid compiler optimization
+		_ = value // Use the result to avoid compiler optimization
+	}
 }
 
 func TestMapStrUpdate(t *testing.T) {

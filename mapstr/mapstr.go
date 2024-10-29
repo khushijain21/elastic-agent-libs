@@ -187,16 +187,15 @@ func (m M) GetValue(key string) (interface{}, error) {
 
 // GetValue gets a value from the map. If the key does not exist then an error
 // is returned.
-func (m M) GetKeyValue(key string) (interface{}, error) {
-	key, _, v, found, err := mapFindFold(key, m, false)
-	fmt.Println("this is key", key)
+func (m M) GetKeyValue(key string) (string, interface{}, error) {
+	key, _, v, found, err := mapFindFold(key, m)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	if !found {
-		return nil, ErrKeyNotFound
+		return "", nil, ErrKeyNotFound
 	}
-	return v, nil
+	return key, v, nil
 }
 
 // Put associates the specified value with the specified key. If the map
@@ -538,7 +537,6 @@ func mapFind(
 func mapFindFold(
 	key string,
 	data M,
-	createMissing bool,
 ) (subKey string, subMap M, oldValue interface{}, present bool, err error) {
 
 	// the value of key as present in map
@@ -558,12 +556,7 @@ func mapFindFold(
 		k := key[:idx]
 		sK, d, exists := foldFunc(data, k)
 		if !exists {
-			if createMissing {
-				d = M{}
-				data[k] = d
-			} else {
-				return "", nil, nil, false, ErrKeyNotFound
-			}
+			return "", nil, nil, false, ErrKeyNotFound
 		}
 
 		v, err := toMapStr(d)
@@ -579,13 +572,10 @@ func mapFindFold(
 }
 
 func foldFunc(data M, key string) (k string, d interface{}, exists bool) {
-
 	for jsonKey, jsonValue := range data {
 		if strings.EqualFold(jsonKey, key) {
 			return jsonKey, jsonValue, true
 		}
 	}
-
 	return "", nil, false
-
 }
