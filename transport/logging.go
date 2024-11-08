@@ -22,16 +22,19 @@ import (
 	"errors"
 	"io"
 	"net"
+	"os"
+	"time"
 
 	"github.com/elastic/elastic-agent-libs/logp"
 )
 
 type loggingConn struct {
 	net.Conn
-	logger *logp.Logger
+	logger      *logp.Logger
+	idleTimeout time.Duration
 }
 
-func LoggingDialer(d Dialer, logger *logp.Logger) Dialer {
+func LoggingDialer(d Dialer, logger *logp.Logger, idleTimeout time.Duration) Dialer {
 	return DialerFunc(func(ctx context.Context, network, addr string) (net.Conn, error) {
 		logger := logger.With("network.transport", network, "server.address", addr)
 		c, err := d.DialContext(ctx, network, addr)
@@ -41,21 +44,42 @@ func LoggingDialer(d Dialer, logger *logp.Logger) Dialer {
 		}
 
 		logger.Debugf("Completed dialing successfully")
-		return &loggingConn{c, logger}, nil
+		return &loggingConn{c, logger, idleTimeout}, nil
 	})
 }
 
 func (l *loggingConn) Read(b []byte) (int, error) {
+
+	// Update the deadline for the connection to expire after idleTimeout duration
+	err := l.Conn.SetDeadline(time.Now().Add(l.idleTimeout))
+	if err != nil {
+		l.logger.Errorf("Error setting deadline: %v", err)
+		return 0, err
+	}
+
+	// Attempt to read from the connection
 	n, err := l.Conn.Read(b)
-	if err != nil && !errors.Is(err, io.EOF) {
-		// Check for a closed network connection error
-		if errors.Is(err, net.ErrClosed) {
-			l.logger.Debugf("Connection is closed: %v", err)
-		} else {
+
+	// Handle errors, including timeout
+	if err != nil {
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			l.logger.Debugf("Idle connection timeout reached: %v", err)
+			return n, err
+		}
+		if err != io.EOF {
 			l.logger.Debugf("Error reading from connection: %v", err)
 		}
+		return n, err
 	}
-	return n, err
+
+	// Reset the deadline again after a successful read
+	err = l.Conn.SetDeadline(time.Now().Add(l.idleTimeout))
+	if err != nil {
+		l.logger.Errorf("Error resetting deadline: %v", err)
+		return n, err
+	}
+
+	return n, nil
 }
 
 func (l *loggingConn) Write(b []byte) (int, error) {

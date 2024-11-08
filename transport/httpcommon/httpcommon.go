@@ -237,8 +237,8 @@ func (settings *HTTPTransportSettings) RoundTripper(opts ...TransportOption) (ht
 	}
 
 	if logger := extra.logger; logger != nil {
-		dialer = transport.LoggingDialer(dialer, logger)
-		tlsDialer = transport.LoggingDialer(tlsDialer, logger)
+		dialer = transport.LoggingDialer(dialer, logger, settings.IdleConnTimeout)
+		tlsDialer = transport.LoggingDialer(tlsDialer, logger, settings.IdleConnTimeout)
 	}
 
 	var rt http.RoundTripper
